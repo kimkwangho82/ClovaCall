@@ -19,7 +19,7 @@ def load_audio(path):
         sound = np.frombuffer(path.getvalue(), dtype=np.int16, offset=44) # offset=44
         # print("np.frombuffer", sound.shape, len(sound), sound)
     
-    sound = sound.astype('float32') / 32767
+    sound = sound.astype('float32') # / 32767
 
     assert len(sound)
 
@@ -77,14 +77,17 @@ class SpectrogramDataset(Dataset):
         D = librosa.stft(y, n_fft=n_fft, hop_length=stride_size, win_length=window_size, window=scipy.signal.hamming)
         spect, phase = librosa.magphase(D)
 
-        # S = log(S+1)
+        # spect.shape = (161, Seq_Len)
+        # S = log(S+1) 
         spect = np.log1p(spect)
+        spect = spect.T
         if self.normalize:
-            mean = np.mean(spect)
-            std = np.std(spect)
+            mean = np.mean(spect, axis=0)
+            std = np.std(spect, axis=0)
+            std = np.clip(std, a_min=1e-20, a_max=None)
             spect -= mean
             spect /= std
-
+        spect = spect.T
         spect = torch.FloatTensor(spect)
 
         return spect

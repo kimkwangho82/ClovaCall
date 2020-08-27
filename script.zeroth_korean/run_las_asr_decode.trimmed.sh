@@ -34,7 +34,7 @@ TEST_FILE=data/zeroth_korean/test_zeroth_korean.trimmed.json
 LABEL_FILE=data/kor_syllable_zeroth.json
 DATASET_PATH=data/zeroth_korean
 
-CUDA_DEVICE_ID=0 # 0
+CUDA_DEVICE_ID=1 # 0
 
 # Default
 RNN_TYPE=LSTM
@@ -56,7 +56,7 @@ CPU_SIZE=8 # 4
 
 MAX_LEN=128
 
-TRAIN_INFO="zeroth_korean_trimmed" # "ClovaCall"
+TRAIN_INFO="zeroth_korean_trimmed_uttmvn" # "ClovaCall"
 MODE="test"
 
 ################################################################

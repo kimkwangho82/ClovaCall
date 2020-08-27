@@ -33,7 +33,7 @@ train.ksponspeech:
 
 server:
 	mkdir -p api/audio
-	cd api && CUDA_VISIBLE_DEVICES=1 python api_server.py
+	cd api && CUDA_VISIBLE_DEVICES= python api_server.py
 
 path:
 	export PYTHONPATH=${PYTHONPATH}:${PWD}/las.pytorch

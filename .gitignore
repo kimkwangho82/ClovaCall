@@ -6,6 +6,8 @@ data/KsponSpeech/
 
 .ipynb_checkpoints/
 
+*.old/
+
 *.DS_Store
 *.pyc
 

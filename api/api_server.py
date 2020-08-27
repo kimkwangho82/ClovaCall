@@ -75,7 +75,7 @@ def setup():
 
     model = Seq2Seq(enc, dec).to(device)
     
-    model_path = "../models/zeroth_korean_trimmed/LSTM_512x3_512x2_zeroth_korean_trimmed/final.pth"
+    model_path = "../models/zeroth_korean_trimmed_uttmvn/LSTM_512x3_512x2_zeroth_korean_trimmed_uttmvn/final.pth"
     print("Loading checkpoint model %s" % model_path)
     state = torch.load(model_path, map_location=device)
     model.load_state_dict(state['model'])
@@ -119,13 +119,17 @@ def parse_audio(audio_path, audio_stream, sample_rate=16000, window_size=0.02, w
     D = librosa.stft(y, n_fft=n_fft, hop_length=stride_size, win_length=window_size, window=scipy.signal.hamming)
     spect, phase = librosa.magphase(D)
 
-    # S = log(S+1)
+    # spect.shape = (161, Seq_Len)
+    # S = log(S+1) 
     spect = np.log1p(spect)
+    spect = spect.T
     if normalize:
-        mean = np.mean(spect)
-        std = np.std(spect)
+        mean = np.mean(spect, axis=0)
+        std = np.std(spect, axis=0)
+        std = np.clip(std, a_min=1e-20, a_max=None)
         spect -= mean
         spect /= std
+    spect = spect.T
 
     spect = torch.FloatTensor(spect)
     spect_length = torch.IntTensor([spect.size(1)])
