@@ -293,7 +293,8 @@ def main():
         testLoader_dict[test_file] = AudioDataLoader(test_dataset, batch_size=1, num_workers=args.num_workers)
 
 
-    input_size = int(math.floor((args.sample_rate * args.window_size) / 2) + 1)
+    # input_size = int(math.floor((args.sample_rate * args.window_size) / 2) + 1)
+    input_size = 80
     enc = EncoderRNN(input_size, args.encoder_size, n_layers=args.encoder_layers,
                      dropout_p=args.dropout, bidirectional=args.bidirectional, 
                      rnn_cell=args.rnn_type, variable_lengths=False)

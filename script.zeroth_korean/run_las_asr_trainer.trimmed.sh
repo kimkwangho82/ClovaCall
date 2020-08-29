@@ -56,7 +56,8 @@ CPU_SIZE=8 # 4
 
 MAX_LEN=128 
 
-TRAIN_INFO="zeroth_korean_trimmed_uttmvn" # "ClovaCall"
+# TRAIN_INFO="zeroth_korean_trimmed_uttmvn" # "ClovaCall"
+TRAIN_INFO="zeroth_korean_trimmed_uttmvn_logmelfbank" # "ClovaCall"
 
 ################################################################
 ##	Careful while modifying lines below.
