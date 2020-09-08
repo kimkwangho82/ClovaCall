@@ -21,7 +21,7 @@ def load_audio(path):
         sound = np.frombuffer(path.getvalue(), dtype=np.int16, offset=44) # offset=44
         # print("np.frombuffer", sound.shape, len(sound), sound)
     
-    sound = sound.astype('float32') / 32767
+    sound = sound.astype('float32') # / 32767 # / 32767
 
     assert len(sound)
 
@@ -59,14 +59,30 @@ class SpectrogramDataset(Dataset):
         self.normalize = normalize
         self.dataset_path = dataset_path
         
+        self.normalize_type = 'instance'
+        # self.normalize_type = 'utterance_mvn' # or 'utterance_mvn' or 'global_mvn'
+        print("normalize_type : ", self.normalize_type)
+        
+#         self.stft_conf = dict(
+#             n_fft = 512,
+#             win_length = 512,
+#             hop_length = 128,
+#             center = True,
+#             window = torch.hann_window(window_length=512,
+#                                        dtype=torch.float32,
+#                                        device=torch.device('cpu')),
+#             normalized = False,
+#             onesided = True
+#         )
+
         self.stft_conf = dict(
-            n_fft = 512,
-            win_length = 512,
-            hop_length = 128,
+            n_fft = 320,
+            win_length = 320,
+            hop_length = 160,
             center = True,
-            window = torch.hann_window(window_length=512,
-                                       dtype=torch.float32,
-                                       device=torch.device('cpu')),
+            window = torch.hamming_window(window_length=320,
+                                          dtype=torch.float32,
+                                          device=torch.device('cpu')),
             normalized = False,
             onesided = True
         )
@@ -88,13 +104,57 @@ class SpectrogramDataset(Dataset):
         audio_path = os.path.join(self.dataset_path, wav_name)
         
         transcript = self.data_list[index]['text']
-        spect = self.parse_audio(audio_path)
+        spect = self.parse_audio(index, audio_path)
         transcript = self.parse_transcript(transcript)
         return spect, transcript
 
-    def parse_audio(self, audio_path):
+    def parse_audio(self, index, audio_path):
         y = load_audio(audio_path)
 
+        n_fft = int(self.audio_conf['sample_rate'] * self.audio_conf['window_size'])
+        window_size = n_fft
+        stride_size = int(self.audio_conf['sample_rate'] * self.audio_conf['window_stride'])
+
+        # STFT
+        D = librosa.stft(y, n_fft=n_fft, hop_length=stride_size, win_length=window_size, window=scipy.signal.hamming)
+        spect, phase = librosa.magphase(D)
+
+        # spect.shape = (161, Seq_Len)
+        # S = log(S+1) 
+        spect = np.log1p(spect)
+        if self.normalize:
+            if self.normalize_type == 'instance':
+                mean = np.mean(spect)
+                std = np.std(spect)
+                spect -= mean
+                spect /= std
+            elif self.normalize_type == 'utterance_mvn':
+                mean = np.mean(spect, axis=-1, keepdims=True)
+                std = np.std(spect, axis=-1, keepdims=True)
+                std = np.clip(std, a_min=1e-20, a_max=None)
+                spect -= mean
+                spect /= std
+            else:
+                raise NotImplementedError
+        spect = torch.FloatTensor(spect)
+
+        return spect
+    
+    def parse_audio_logfbank(self, index, audio_path):
+        y = load_audio(audio_path)
+        
+        
+#         n_fft = int(self.audio_conf['sample_rate'] * self.audio_conf['window_size'])
+#         window_size = n_fft
+#         stride_size = int(self.audio_conf['sample_rate'] * self.audio_conf['window_stride'])
+#         print("[{}] n_fft : {}, window_size : {}, stride_size : {}".format(index, n_fft, window_size, stride_size))
+
+#         # STFT
+#         D = librosa.stft(y, n_fft=n_fft, hop_length=stride_size, win_length=window_size, window=scipy.signal.hamming)
+#         spect, phase = librosa.magphase(D)
+#         print("[{}] librosa : {}, {}".format(index, spect.shape, spect))
+        
+        
         # 1. PCM --> STFT
         y = torch.from_numpy(y)
         D = torch.stft(y, **self.stft_conf) # D.shape = (Freq, Frames, 2)
@@ -105,13 +165,27 @@ class SpectrogramDataset(Dataset):
         input_stft = ComplexTensor(input_stft[..., 0], input_stft[..., 1])
         
         input_power = (input_stft.real ** 2) + (input_stft.imag ** 2)
+        input_spec = torch.sqrt(input_power)
+        
+#         data = torch.sqrt(input_power).transpose(0, 1)
+#         print("[{}] pytorch : {}, {}".format(index, data.size(), data))
+        
+        
+#         diff = spect - data.detach().numpy()
+#         mean = np.mean(diff)
+#         print("[{}] diff : {}, {}, {}".format(index, diff.shape, diff, mean))
+        
+#         input()
         
         # 3. Power Spectrum --> Log Mel-Fbank
         # feat: (T, D1) x melmat: (D1, D2) -> mel_feat: (T, D2)
-        mel_feat = torch.matmul(input_power, self.melmat)
-        mel_feat = torch.clamp(mel_feat, min=1e-10)
-        logmel_feat = mel_feat.log()
-
+#         mel_feat = torch.matmul(input_power, self.melmat)
+#         mel_feat = torch.clamp(mel_feat, min=1e-10)
+#         logmel_feat = mel_feat.log()
+        
+        feat = input_spec
+        logmel_feat = torch.log1p(feat)
+        
         # 4. Utt-MVN (Utterance Mean Variance Normalization)
         if self.normalize:
             mean = torch.mean(logmel_feat, dim=-1, keepdim=True)

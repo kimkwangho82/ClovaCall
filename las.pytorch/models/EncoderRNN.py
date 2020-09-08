@@ -64,7 +64,7 @@ class EncoderRNN(nn.Module):
         rnn_input_dims = int(math.floor(rnn_input_dims + 2 * 10 - 21) / 2 + 1)
         rnn_input_dims *= outputs_channel
         
-        self.rnn =  self.rnn_cell(rnn_input_dims, self.hidden_size, self.n_layers, dropout=self.dropout_p, bidirectional=self.bidirectional)
+        self.rnn =  self.rnn_cell(rnn_input_dims, self.hidden_size, self.n_layers, batch_first=True, dropout=self.dropout_p, bidirectional=self.bidirectional)
 
 
     def forward(self, input_var, input_lengths=None):

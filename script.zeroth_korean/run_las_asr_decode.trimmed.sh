@@ -34,7 +34,7 @@ TEST_FILE=data/zeroth_korean/test_zeroth_korean.trimmed.json
 LABEL_FILE=data/kor_syllable_zeroth.json
 DATASET_PATH=data/zeroth_korean
 
-CUDA_DEVICE_ID=1 # 0
+CUDA_DEVICE_ID=0 # 1 # 0
 
 # Default
 RNN_TYPE=LSTM
@@ -56,8 +56,28 @@ CPU_SIZE=8 # 4
 
 MAX_LEN=128
 
-TRAIN_INFO="zeroth_korean_trimmed_uttmvn" # "ClovaCall"
+# TRAIN_INFO="zeroth_korean_trimmed_uttmvn" # "ClovaCall"
+TRAIN_INFO="zeroth_korean_trimmed_instance" # "ClovaCall"
+# TRAIN_INFO="zeroth_korean_trimmed_utterance_mvn" # "ClovaCall"
 MODE="test"
+
+
+################################################################
+## Experiment
+################################################################
+norm_type="instance"
+
+if [ $norm_type = "instance" ]; then
+    CUDA_DEVICE_ID=1
+    TRAIN_INFO="zeroth_korean_trimmed_instance+inputnorm"
+elif [ $norm_type = "utterance_mvn" ]; then
+    CUDA_DEVICE_ID=0
+    TRAIN_INFO="zeroth_korean_trimmed_utterance_mvn+inputnorm"
+else
+    exit 1
+fi
+
+
 
 ################################################################
 ##	Careful while modifying lines below.
