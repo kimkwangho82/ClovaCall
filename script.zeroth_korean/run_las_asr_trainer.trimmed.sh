@@ -52,7 +52,7 @@ DECODER_LAYERS=2
 DECODER_SIZE=512
 
 GPU_SIZE=1 # 1
-CPU_SIZE=8 # 4
+CPU_SIZE=4 # 4
 
 MAX_LEN=128
 
@@ -72,7 +72,7 @@ if [ $norm_type = "instance" ]; then
     TRAIN_INFO="zeroth_korean_trimmed_instance+inputnorm"
 elif [ $norm_type = "utterance_mvn" ]; then
     CUDA_DEVICE_ID=0
-    TRAIN_INFO="zeroth_korean_trimmed_utterance_mvn+inputnorm"
+    TRAIN_INFO="zeroth_korean_trimmed_utterance_mvn+inputnorm+cnn"
 else
     exit 1
 fi

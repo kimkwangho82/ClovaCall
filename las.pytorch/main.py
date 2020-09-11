@@ -101,6 +101,9 @@ def train(model, data_loader, criterion, optimizer, device, epoch, train_sampler
     total_dist = 0
     total_length = 0
     total_sent_num = 0
+    
+    total_correct = 0
+    total_correct_denom = 0
 
     model.train()
     for i, (data) in enumerate(data_loader):
@@ -116,13 +119,17 @@ def train(model, data_loader, criterion, optimizer, device, epoch, train_sampler
         target = scripts[:, 1:]
 
         logit = model(feats, feat_lengths, scripts, teacher_forcing_ratio=teacher_forcing_ratio)
-
         logit = torch.stack(logit, dim=1).to(device)
         y_hat = logit.max(-1)[1]
 
         loss = criterion(logit.contiguous().view(-1, logit.size(-1)), target.contiguous().view(-1))
         total_loss += loss.item()
         total_num += sum(feat_lengths).item()
+        
+        correct = (y_hat == target).sum().item()
+        correct_denom = sum(script_lengths)
+        total_correct += correct
+        total_correct_denom += correct_denom
 
         loss.backward()
         torch.nn.utils.clip_grad_norm_(model.parameters(), max_norm)
@@ -132,16 +139,18 @@ def train(model, data_loader, criterion, optimizer, device, epoch, train_sampler
         total_dist += dist
         total_length += length
         cer = float(dist / length) * 100
-
+        acc = float(correct / correct_denom) * 100
+        
         total_sent_num += target.size(0)
 
         print('Epoch: [{0}][{1}/{2}]\t'
               'Loss {loss:.4f}\t'
-              'Cer {cer:.4f}'.format(
-              (epoch + 1), (i + 1), len(train_sampler), loss=loss, cer=cer))
+              'Cer {cer:.4f}\t'
+              'Acc {acc:.4f}'.format(
+              (epoch + 1), (i + 1), len(train_sampler), loss=loss, cer=cer, acc=acc))
 
     # return total_loss / total_num, (total_dist / total_length) * 100
-    return total_loss / len(data_loader), (total_dist / total_length) * 100
+    return total_loss / len(data_loader), (total_dist / total_length) * 100, (total_correct / total_correct_denom) * 100
 
 
 def evaluate(model, data_loader, criterion, device, save_output=False):
@@ -151,6 +160,9 @@ def evaluate(model, data_loader, criterion, device, save_output=False):
     total_length = 0
     total_sent_num = 0
     transcripts_list = []
+    
+    total_correct = 0
+    total_correct_denom = 0
 
     model.eval()
     with torch.no_grad():
@@ -166,13 +178,19 @@ def evaluate(model, data_loader, criterion, device, save_output=False):
             
             logit = model(feats, feat_lengths, None, teacher_forcing_ratio=0.0)
             logit = torch.stack(logit, dim=1).to(device)
-            y_hat = logit.max(-1)[1]
+            # y_hat = logit.max(-1)[1]
 
             logit = logit[:,:target.size(1),:] # cut over length to calculate loss
+            y_hat = logit.max(-1)[1]
                         
             loss = criterion(logit.contiguous().view(-1, logit.size(-1)), target.contiguous().view(-1))
             total_loss += loss.item()
             total_num += sum(feat_lengths).item()
+            
+            correct = (y_hat == target).sum().item()
+            correct_denom = sum(script_lengths)
+            total_correct += correct
+            total_correct_denom += correct_denom
 
             dist, length, transcripts = get_distance(target, y_hat)
             cer = float(dist / length) * 100
@@ -187,7 +205,8 @@ def evaluate(model, data_loader, criterion, device, save_output=False):
     # aver_loss = total_loss / total_num
     aver_loss = total_loss / len(data_loader)
     aver_cer = float(total_dist / total_length) * 100
-    return aver_loss, aver_cer, transcripts_list
+    aver_acc = float(total_correct / total_correct_denom) * 100
+    return aver_loss, aver_cer, aver_acc, transcripts_list
 
 
 def main():
@@ -248,6 +267,7 @@ def main():
     SOS_token = char2index['<s>']
     EOS_token = char2index['</s>']
     PAD_token = char2index['_']
+    print("SOS_token: {}, EOS_token: {}, PAD_token: {}".format(SOS_token, EOS_token, PAD_token))
 
     device = torch.device('cuda' if args.cuda else 'cpu')
 
@@ -296,13 +316,13 @@ def main():
     input_size = int(math.floor((args.sample_rate * args.window_size) / 2) + 1)
     # input_size = 80
     enc = EncoderRNN(input_size, args.encoder_size, n_layers=args.encoder_layers,
-                     dropout_p=args.dropout, bidirectional=args.bidirectional, 
+                     dropout_p=0.3, bidirectional=args.bidirectional, # dropout_p=args.dropout
                      rnn_cell=args.rnn_type, variable_lengths=False)
 
     dec = DecoderRNN(len(char2index), args.max_len, args.decoder_size, args.encoder_size,
-                     SOS_token, EOS_token,
+                     SOS_token, EOS_token, PAD_token,
                      n_layers=args.decoder_layers, rnn_cell=args.rnn_type, 
-                     dropout_p=args.dropout, bidirectional_encoder=args.bidirectional)
+                     dropout_p=0.3, bidirectional_encoder=args.bidirectional) # dropout_p=args.dropout
 
 
     model = Seq2Seq(enc, dec)
@@ -334,8 +354,8 @@ def main():
 #         scheduler.load_state_dict(scheduler_state)
 
     criterion = nn.CrossEntropyLoss(reduction='mean').to(device)
+    # criterion = nn.NLLLoss(reduction='mean', ignore_index=PAD_token).to(device)
     
-
     print(model)
     print("Number of parameters: %d" % Seq2Seq.get_param_size(model))
 
@@ -363,21 +383,21 @@ def main():
         start_time = datetime.datetime.now()
         
         for epoch in range(begin_epoch, args.epochs):
-            train_loss, train_cer = train(train_model, train_loader, criterion, optimizer, device, epoch, train_sampler, args.max_norm, args.teacher_forcing)
+            train_loss, train_cer, train_acc = train(train_model, train_loader, criterion, optimizer, device, epoch, train_sampler, args.max_norm, args.teacher_forcing)
             
             # end_time = time.time()
             # elapsed_time = end_time - start_time
             elapsed_time  = datetime.datetime.now() - start_time
             
-            train_log = 'Train({name}) Summary Epoch: [{0}]\tAverage Loss {loss:.3f}\tAverage CER {cer:.3f}\tTime {time:}'.format(epoch + 1, name='train', loss=train_loss, cer=train_cer, time=elapsed_time)
+            train_log = 'Train({name}) Summary Epoch: [{0}]\tAverage Loss {loss:.4f}\tAverage CER {cer:.4f}\tACC {acc:.4f}\tTime {time:}'.format(epoch + 1, name='train', loss=train_loss, cer=train_cer, acc=train_acc, time=elapsed_time)
             print(train_log)
             
             cer_list = []
             for test_file in args.test_file_list:
                 test_loader = testLoader_dict[test_file]
-                test_loss, test_cer, _ = evaluate(model, test_loader, criterion, device, save_output=False)
-                test_log = 'Test({name}) Summary Epoch: [{0}]\tAverage Loss {loss:.3f}\tAverage CER {cer:.3f}\t'.format(
-                            epoch + 1, name=test_file, loss=test_loss, cer=test_cer)
+                test_loss, test_cer, test_acc, _ = evaluate(model, test_loader, criterion, device, save_output=False)
+                test_log = 'Test({name}) Summary Epoch: [{0}]\tAverage Loss {loss:.4f}\tAverage CER {cer:.4f}\tAverage ACC {acc:.4f}\t'.format(
+                            epoch + 1, name=test_file, loss=test_loss, cer=test_cer, acc=test_acc)
                 print(test_log)
 
                 cer_list.append(test_cer)

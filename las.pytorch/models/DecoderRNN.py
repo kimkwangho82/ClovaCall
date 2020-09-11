@@ -6,7 +6,9 @@ import torch.nn as nn
 from torch.autograd import Variable
 import torch.nn.functional as F
 
-from .attention import Attention
+from .attention import Attention, AttentionLoc
+
+from .utils import make_pad_mask
 
 if torch.cuda.is_available():
     import torch.cuda as device
@@ -16,7 +18,7 @@ else:
 
 class DecoderRNN(nn.Module):
     def __init__(self, vocab_size, max_len, hidden_size, encoder_size,
-                 sos_id, eos_id,
+                 sos_id, eos_id, pad_id,
                  n_layers=1, rnn_cell='gru', 
                  bidirectional_encoder=False, bidirectional_decoder=False,
                  dropout_p=0, use_attention=True):
@@ -34,6 +36,7 @@ class DecoderRNN(nn.Module):
         self.use_attention = use_attention
         self.eos_id = eos_id
         self.sos_id = sos_id
+        self.pad_id = pad_id
         
         if rnn_cell.lower() == 'lstm':
             self.rnn_cell = nn.LSTM
@@ -46,10 +49,11 @@ class DecoderRNN(nn.Module):
         self.rnn = self.rnn_cell(self.hidden_size + self.encoder_output_size, self.hidden_size, self.n_layers,
                                  batch_first=True, dropout=dropout_p, bidirectional=self.bidirectional_decoder)
 
-        self.embedding = nn.Embedding(self.vocab_size, self.hidden_size)
+        self.embedding = nn.Embedding(self.vocab_size, self.hidden_size) # , padding_idx=self.pad_id)
         self.input_dropout = nn.Dropout(self.dropout_p)
         
-        self.attention = Attention(dec_dim=self.hidden_size, enc_dim=self.encoder_output_size, conv_dim=1, attn_dim=self.hidden_size)
+        self.attention = AttentionLoc(dec_dim=self.hidden_size, enc_dim=self.encoder_output_size, conv_dim=1, attn_dim=self.hidden_size)
+        # self.attention = Attention(dim=self.hidden_size)
         self.fc = nn.Linear(self.hidden_size + self.encoder_output_size, self.output_size)
 
 
@@ -69,8 +73,9 @@ class DecoderRNN(nn.Module):
             rnn_input = torch.cat([embedded_inputs, context], dim=1) # (B, dec_D + enc_D)
             rnn_input = rnn_input.unsqueeze(1) 
             output, hidden = self.rnn(rnn_input, hidden) # (B, 1, dec_D)
-
+            
             context, attn_w = self.attention(output, encoder_outputs, attn_w) # (B, 1, enc_D), (B, enc_T)
+            # context, attn_w = self.attention(output, encoder_outputs) # (B, 1, enc_D), (B, enc_T)
             attn_w_all.append(attn_w)
             
             context = context.squeeze(1)
@@ -92,7 +97,8 @@ class DecoderRNN(nn.Module):
         return y_all, hidden, context, attn_w_all
 
 
-    def forward(self, inputs=None, encoder_hidden=None, encoder_outputs=None,
+    def forward(self, inputs=None, encoder_hidden=None, encoder_outputs=None, 
+                    encoder_lengths=None,
                     function=F.log_softmax, teacher_forcing_ratio=0):
         """
         param:inputs: Decoder inputs sequence, Shape=(B, dec_T)
@@ -131,14 +137,20 @@ class DecoderRNN(nn.Module):
                 update_idx = ((lengths > step) & eos_batches) != 0
                 lengths[update_idx] = len(sequence_symbols)
             return symbols
+        
+        # attention_mask
+#         att_mask = make_pad_mask(encoder_lengths) # .unsqueeze(1)
+#         if torch.cuda.is_available():
+#             att_mask = att_mask.cuda()
+#         self.attention.set_mask(att_mask)
 
         if use_teacher_forcing:
             decoder_input = inputs[:, :-1]
             decoder_output, decoder_hidden, context, attn_w = self.forward_step(decoder_input, 
                                                                                 decoder_hidden, 
                                                                                 encoder_outputs,
-                                                                                context,    
-                                                                                attn_w, 
+                                                                                context,
+                                                                                attn_w,
                                                                                 function=function)
 
             for di in range(decoder_output.size(1)):

@@ -16,12 +16,13 @@ class Seq2Seq(nn.Module):
                 teacher_forcing_ratio=0):
 
         self.encoder.rnn.flatten_parameters()
-        encoder_outputs, encoder_hidden = self.encoder(input_variable, input_lengths)
+        encoder_outputs, encoder_lengths, encoder_hidden = self.encoder(input_variable, input_lengths)
 
         self.decoder.rnn.flatten_parameters()
         decoder_output = self.decoder(inputs=target_variable,
                                       encoder_hidden=None,
                                       encoder_outputs=encoder_outputs,
+                                      encoder_lengths=encoder_lengths,
                                       function=self.decode_function,
                                       teacher_forcing_ratio=teacher_forcing_ratio)
 
