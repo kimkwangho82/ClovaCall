@@ -34,7 +34,7 @@ TEST_FILE=data/zeroth_korean/test_zeroth_korean.trimmed.json
 LABEL_FILE=data/kor_syllable_zeroth.json
 DATASET_PATH=data/zeroth_korean
 
-CUDA_DEVICE_ID=0 #1 # 0
+CUDA_DEVICE_ID=1 # 0
 
 # Default
 RNN_TYPE=LSTM
@@ -54,9 +54,10 @@ DECODER_SIZE=512
 GPU_SIZE=1 # 1
 CPU_SIZE=4 # 4
 
-MAX_LEN=128
+MAX_LEN=128 
 
 # TRAIN_INFO="zeroth_korean_trimmed_uttmvn" # "ClovaCall"
+<<<<<<< HEAD
 TRAIN_INFO="zeroth_korean_trimmed_utterance_mvn" # "ClovaCall"
 TRAIN_INFO="zeroth_korean_trimmed_utterance_mvn" # "ClovaCall"
 # TRAIN_INFO="zeroth_korean_trimmed_uttmvn_logmelfbank" # "ClovaCall"
@@ -77,6 +78,9 @@ else
     exit 1
 fi
 
+=======
+TRAIN_INFO="zeroth_korean_trimmed_uttmvn_logmelfbank" # "ClovaCall"
+>>>>>>> parent of 470a378... 입력 Normalization (-1 ~ +1) 과 Log-STFT Normalization (instance, utterance_mvn)에 대한 실험 진행
 
 ################################################################
 ##	Careful while modifying lines below.

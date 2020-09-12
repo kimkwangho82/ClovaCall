@@ -38,7 +38,7 @@ from models import EncoderRNN, DecoderRNN, Seq2Seq
 # @Kwang-Ho
 import time
 import datetime
-# from initialize import initialize
+
 
 char2index = dict()
 index2char = dict()
@@ -217,7 +217,7 @@ def main():
     global PAD_token
 
     parser = argparse.ArgumentParser(description='LAS')
-    parser.add_argument('--model-nam e', type=str, default='LAS')
+    parser.add_argument('--model-name', type=str, default='LAS')
     # Dataset
     parser.add_argument('--train-file', type=str,
                         help='data list about train dataset', default='data/ClovaCall/train_ClovaCall.json')
@@ -313,8 +313,8 @@ def main():
         testLoader_dict[test_file] = AudioDataLoader(test_dataset, batch_size=1, num_workers=args.num_workers)
 
 
-    input_size = int(math.floor((args.sample_rate * args.window_size) / 2) + 1)
-    # input_size = 80
+    # input_size = int(math.floor((args.sample_rate * args.window_size) / 2) + 1)
+    input_size = 80
     enc = EncoderRNN(input_size, args.encoder_size, n_layers=args.encoder_layers,
                      dropout_p=0.3, bidirectional=args.bidirectional, # dropout_p=args.dropout
                      rnn_cell=args.rnn_type, variable_lengths=False)
@@ -326,13 +326,11 @@ def main():
 
 
     model = Seq2Seq(enc, dec)
-    # initialize(model, init='xavier_uniform')
 
     save_folder = args.save_folder
     os.makedirs(save_folder, exist_ok=True)
 
     optim_state = None
-    # scheduler_state = None
     if args.load_model:  # Starting from previous model
         print("Loading checkpoint model %s" % args.model_path)
         state = torch.load(args.model_path)
@@ -341,17 +339,11 @@ def main():
 
         if not args.finetune:  # Just load model
             optim_state = state['optimizer']
-            # scheduler_state = state['scheduler']
-
+ 
     model = model.to(device)
     optimizer = optim.Adam(model.parameters(), lr=args.lr, weight_decay=1e-5)
-    # optimizer = optim.Adadelta(model.parameters(), lr=args.lr, rho=0.95, eps=1e-08, weight_decay=0)
     if optim_state is not None:
-        optimizer.load_state_dict(optim_state)
-            
-#     scheduler = optim.lr_scheduler.ReduceLROnPlateau(optimizer, mode='min', factor=0.5, patience=1)
-#     if scheduler_state is not None:
-#         scheduler.load_state_dict(scheduler_state)
+            optimizer.load_state_dict(optim_state)
 
     criterion = nn.CrossEntropyLoss(reduction='mean').to(device)
     # criterion = nn.NLLLoss(reduction='mean', ignore_index=PAD_token).to(device)
@@ -407,20 +399,16 @@ def main():
                 state = {
                     'model': model.state_dict(),
                     'optimizer': optimizer.state_dict()
-                    # 'scheduler': scheduler.state_dict()
                 }
                 torch.save(state, args.model_path)
                 best_cer = cer_list[0]
 
             print("Shuffling batches...")
             train_sampler.shuffle(epoch)
-            
-#             scheduler.step(test_loss)
-#             print('Learning rate annealed to: {lr:.8f}'.format(lr=optimizer.param_groups[0]["lr"]))
 
             for g in optimizer.param_groups:
                 g['lr'] = g['lr'] / args.learning_anneal
-            print('Learning rate annealed to: {lr:.8f}'.format(lr=g['lr']))
+            print('Learning rate annealed to: {lr:.6f}'.format(lr=g['lr']))
 
 if __name__ == "__main__":
     main()

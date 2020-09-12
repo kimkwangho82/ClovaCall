@@ -22,7 +22,7 @@ def load_audio(path):
         sound = np.frombuffer(path.getvalue(), dtype=np.int16, offset=44) # offset=44
         # print("np.frombuffer", sound.shape, len(sound), sound)
     
-    sound = sound.astype('float32') # / 32767 # / 32767
+    sound = sound.astype('float32') / 32767
 
     assert len(sound)
 
@@ -60,10 +60,13 @@ class SpectrogramDataset(Dataset):
         self.normalize = normalize
         self.dataset_path = dataset_path
         
+<<<<<<< HEAD
         # self.normalize_type = 'instance'
         self.normalize_type = 'utterance_mvn' # or 'utterance_mvn' or 'global_mvn'
         print("normalize_type : ", self.normalize_type)
         
+=======
+>>>>>>> parent of 470a378... 입력 Normalization (-1 ~ +1) 과 Log-STFT Normalization (instance, utterance_mvn)에 대한 실험 진행
         self.stft_conf = dict(
             n_fft = 512,
             win_length = 512,
@@ -106,14 +109,19 @@ class SpectrogramDataset(Dataset):
         audio_path = os.path.join(self.dataset_path, wav_name)
         
         transcript = self.data_list[index]['text']
+<<<<<<< HEAD
         spect = self.parse_audio(index, audio_path)
         # spect = self.parse_audio_melfbank(index, audio_path)
+=======
+        spect = self.parse_audio(audio_path)
+>>>>>>> parent of 470a378... 입력 Normalization (-1 ~ +1) 과 Log-STFT Normalization (instance, utterance_mvn)에 대한 실험 진행
         transcript = self.parse_transcript(transcript)
         return spect, transcript
 
-    def parse_audio(self, index, audio_path):
+    def parse_audio(self, audio_path):
         y = load_audio(audio_path)
 
+<<<<<<< HEAD
         n_fft = int(self.audio_conf['sample_rate'] * self.audio_conf['window_size'])
         window_size = n_fft
         stride_size = int(self.audio_conf['sample_rate'] * self.audio_conf['window_stride'])
@@ -158,6 +166,8 @@ class SpectrogramDataset(Dataset):
 #         print("[{}] librosa : {}, {}".format(index, spect.shape, spect))
         
         
+=======
+>>>>>>> parent of 470a378... 입력 Normalization (-1 ~ +1) 과 Log-STFT Normalization (instance, utterance_mvn)에 대한 실험 진행
         # 1. PCM --> STFT
         y = torch.from_numpy(y)
         D = torch.stft(y, **self.stft_conf) # D.shape = (Freq, Frames, 2)
@@ -168,6 +178,7 @@ class SpectrogramDataset(Dataset):
         input_stft = ComplexTensor(input_stft[..., 0], input_stft[..., 1])
         
         input_power = (input_stft.real ** 2) + (input_stft.imag ** 2)
+<<<<<<< HEAD
         # input_spec = torch.sqrt(input_power)
         
 #         data = torch.sqrt(input_power).transpose(0, 1)
@@ -179,14 +190,20 @@ class SpectrogramDataset(Dataset):
 #         print("[{}] diff : {}, {}, {}".format(index, diff.shape, diff, mean))
         
 #         input()
+=======
+>>>>>>> parent of 470a378... 입력 Normalization (-1 ~ +1) 과 Log-STFT Normalization (instance, utterance_mvn)에 대한 실험 진행
         
         # 3. Power Spectrum --> Log Mel-Fbank
         # feat: (T, D1) x melmat: (D1, D2) -> mel_feat: (T, D2)
         mel_feat = torch.matmul(input_power, self.melmat)
         mel_feat = torch.clamp(mel_feat, min=1e-10)
         logmel_feat = mel_feat.log()
+<<<<<<< HEAD
         
         feat = logmel_feat
+=======
+
+>>>>>>> parent of 470a378... 입력 Normalization (-1 ~ +1) 과 Log-STFT Normalization (instance, utterance_mvn)에 대한 실험 진행
         # 4. Utt-MVN (Utterance Mean Variance Normalization)
         if self.normalize:
             mean = torch.mean(feat, dim=-1, keepdim=True)

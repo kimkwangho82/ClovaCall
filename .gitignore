@@ -14,6 +14,3 @@ data/KsponSpeech/
 *.wav
 *.flac
 *.tar.gz
-
-*.npy
-*.npz

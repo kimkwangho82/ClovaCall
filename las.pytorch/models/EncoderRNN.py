@@ -192,7 +192,11 @@ class EncoderRNN(nn.Module):
         rnn_input_dims = int(math.floor(rnn_input_dims + 2 * 10 - 21) / 2 + 1)
         rnn_input_dims *= outputs_channel
         
+<<<<<<< HEAD
         
+=======
+        self.rnn =  self.rnn_cell(rnn_input_dims, self.hidden_size, self.n_layers, dropout=self.dropout_p, bidirectional=self.bidirectional)
+>>>>>>> parent of 470a378... 입력 Normalization (-1 ~ +1) 과 Log-STFT Normalization (instance, utterance_mvn)에 대한 실험 진행
 
 #         outputs_channel = 256
 #         rnn_input_dims = ((input_size - 1) // 2 - 1) // 2
