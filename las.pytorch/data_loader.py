@@ -12,6 +12,8 @@ from torch.utils.data.sampler import Sampler
 from torch_complex.tensor import ComplexTensor
 from functools import lru_cache
 
+import torchaudio
+
 
 def load_audio(path):
     
@@ -60,13 +62,10 @@ class SpectrogramDataset(Dataset):
         self.normalize = normalize
         self.dataset_path = dataset_path
         
-<<<<<<< HEAD
         # self.normalize_type = 'instance'
         self.normalize_type = 'utterance_mvn' # or 'utterance_mvn' or 'global_mvn'
         print("normalize_type : ", self.normalize_type)
-        
-=======
->>>>>>> parent of 470a378... 입력 Normalization (-1 ~ +1) 과 Log-STFT Normalization (instance, utterance_mvn)에 대한 실험 진행
+
         self.stft_conf = dict(
             n_fft = 512,
             win_length = 512,
@@ -103,25 +102,22 @@ class SpectrogramDataset(Dataset):
         melmat = librosa.filters.mel(**mel_conf)
         self.melmat = torch.from_numpy(melmat.T).float()
 
-    # @lru_cache(maxsize=100000)
+    @lru_cache(maxsize=100000)
     def __getitem__(self, index):
         wav_name = self.data_list[index]['wav']
         audio_path = os.path.join(self.dataset_path, wav_name)
         
         transcript = self.data_list[index]['text']
-<<<<<<< HEAD
-        spect = self.parse_audio(index, audio_path)
-        # spect = self.parse_audio_melfbank(index, audio_path)
-=======
-        spect = self.parse_audio(audio_path)
->>>>>>> parent of 470a378... 입력 Normalization (-1 ~ +1) 과 Log-STFT Normalization (instance, utterance_mvn)에 대한 실험 진행
+        # spect = self.parse_audio(index, audio_path)
+        
+        spect = self.parse_audio_melfbank_from_espnet(index, audio_path)
+        # spect = self.parse_audio_melfbank_from_kaldi(index, audio_path)
         transcript = self.parse_transcript(transcript)
         return spect, transcript
 
-    def parse_audio(self, audio_path):
+    def parse_audio(self, index, audio_path):
         y = load_audio(audio_path)
 
-<<<<<<< HEAD
         n_fft = int(self.audio_conf['sample_rate'] * self.audio_conf['window_size'])
         window_size = n_fft
         stride_size = int(self.audio_conf['sample_rate'] * self.audio_conf['window_stride'])
@@ -151,23 +147,9 @@ class SpectrogramDataset(Dataset):
 
         return spect
     
-    def parse_audio_melfbank(self, index, audio_path):
+    def parse_audio_melfbank_from_espnet(self, index, audio_path):
         y = load_audio(audio_path)
         
-        
-#         n_fft = int(self.audio_conf['sample_rate'] * self.audio_conf['window_size'])
-#         window_size = n_fft
-#         stride_size = int(self.audio_conf['sample_rate'] * self.audio_conf['window_stride'])
-#         print("[{}] n_fft : {}, window_size : {}, stride_size : {}".format(index, n_fft, window_size, stride_size))
-
-#         # STFT
-#         D = librosa.stft(y, n_fft=n_fft, hop_length=stride_size, win_length=window_size, window=scipy.signal.hamming)
-#         spect, phase = librosa.magphase(D)
-#         print("[{}] librosa : {}, {}".format(index, spect.shape, spect))
-        
-        
-=======
->>>>>>> parent of 470a378... 입력 Normalization (-1 ~ +1) 과 Log-STFT Normalization (instance, utterance_mvn)에 대한 실험 진행
         # 1. PCM --> STFT
         y = torch.from_numpy(y)
         D = torch.stft(y, **self.stft_conf) # D.shape = (Freq, Frames, 2)
@@ -176,46 +158,66 @@ class SpectrogramDataset(Dataset):
         # 2. STFT --> Power Spectrum
         input_stft = D
         input_stft = ComplexTensor(input_stft[..., 0], input_stft[..., 1])
-        
         input_power = (input_stft.real ** 2) + (input_stft.imag ** 2)
-<<<<<<< HEAD
-        # input_spec = torch.sqrt(input_power)
-        
-#         data = torch.sqrt(input_power).transpose(0, 1)
-#         print("[{}] pytorch : {}, {}".format(index, data.size(), data))
-        
-        
-#         diff = spect - data.detach().numpy()
-#         mean = np.mean(diff)
-#         print("[{}] diff : {}, {}, {}".format(index, diff.shape, diff, mean))
-        
-#         input()
-=======
->>>>>>> parent of 470a378... 입력 Normalization (-1 ~ +1) 과 Log-STFT Normalization (instance, utterance_mvn)에 대한 실험 진행
         
         # 3. Power Spectrum --> Log Mel-Fbank
         # feat: (T, D1) x melmat: (D1, D2) -> mel_feat: (T, D2)
         mel_feat = torch.matmul(input_power, self.melmat)
         mel_feat = torch.clamp(mel_feat, min=1e-10)
         logmel_feat = mel_feat.log()
-<<<<<<< HEAD
         
         feat = logmel_feat
-=======
-
->>>>>>> parent of 470a378... 입력 Normalization (-1 ~ +1) 과 Log-STFT Normalization (instance, utterance_mvn)에 대한 실험 진행
+        
         # 4. Utt-MVN (Utterance Mean Variance Normalization)
         if self.normalize:
-            mean = torch.mean(feat, dim=-1, keepdim=True)
-            # std = torch.std(feat, dim=-1, keepdim=True)
-            # std = torch.clamp(std, min=1e-20)
-            
-            feat -= mean
-            # feat /= std
+            if self.normalize_type == 'instance':
+                mean = torch.mean(feat)
+                std = torch.std(feat)
+                feat -= mean
+                feat /= std
+            elif self.normalize_type == 'utterance_mvn':
+                mean = torch.mean(feat, dim=-1, keepdim=True)
+                std = torch.std(feat, dim=-1, keepdim=True)
+                std = torch.clamp(std, min=1e-20)
+
+                feat -= mean
+                feat /= std
         
         feat = feat.transpose(0, 1).contiguous()
         
         return feat
+
+    def parse_audio_melfbank_from_kaldi(self, index, audio_path):
+        y = load_audio(audio_path)
+        y = torch.FloatTensor(y).unsqueeze(0)
+        
+        # |feat| = (seq_len, feat_dim)
+        feat = torchaudio.compliance.kaldi.fbank(y,
+                                                 dither= 0.0,
+                                                 frame_length=25.0,
+                                                 frame_shift=10.0,
+                                                 sample_frequency=16000.0,
+                                                 num_mel_bins=80)
+        
+        # 4. Utt-MVN (Utterance Mean Variance Normalization)
+        if self.normalize:
+            if self.normalize_type == 'instance':
+                mean = torch.mean(feat)
+                std = torch.std(feat)
+                feat -= mean
+                feat /= std
+            elif self.normalize_type == 'utterance_mvn':
+                mean = torch.mean(feat, dim=-1, keepdim=True)
+                # std = torch.std(feat, dim=-1, keepdim=True)
+                # std = torch.clamp(std, min=1e-20)
+
+                feat -= mean
+                # feat /= std
+
+        feat = feat.transpose(0, 1).contiguous()
+        
+        return feat
+        
 
     def parse_transcript(self, transcript):
         transcript = list(filter(None, [self.char2index.get(x) for x in list(transcript)]))

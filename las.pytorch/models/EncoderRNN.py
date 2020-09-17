@@ -173,45 +173,63 @@ class EncoderRNN(nn.Module):
         else:
             raise ValueError("Unsupported RNN Cell: {0}".format(rnn_cell))
         
+#         self.conv = MaskConv(nn.Sequential(
+#             nn.Conv2d(1, 64, kernel_size=(3, 3), stride=(1, 1), padding=(1, 1), bias=False),
+#             nn.BatchNorm2d(num_features=64),
+#             nn.Hardtanh(0, 20, inplace=True),
+#             nn.Conv2d(64, 64, kernel_size=(3, 3), stride=(1, 1), padding=(1, 1), bias=False),
+#             nn.BatchNorm2d(num_features=64),
+#             nn.Hardtanh(0, 20, inplace=True),
+#             nn.MaxPool2d(2, stride=2),
+#             nn.Conv2d(64, 128, kernel_size=(3, 3), stride=(1, 1), padding=(1, 1), bias=False),
+#             nn.BatchNorm2d(num_features=128),
+#             nn.Hardtanh(0, 20, inplace=True),
+#             nn.Conv2d(128, 128, kernel_size=(3, 3), stride=(1, 1), padding=(1, 1), bias=False),
+#             nn.BatchNorm2d(num_features=128),
+#             nn.Hardtanh(0, 20, inplace=True),
+#             nn.MaxPool2d(2, stride=2)
+#         ))
+        
+        
+        
+        
+        
         """
         Copied from https://github.com/SeanNaren/deepspeech.pytorch/blob/master/model.py
         Copyright (c) 2017 Sean Naren
         MIT License
         """
-        outputs_channel = 32
-        self.conv = MaskConv(nn.Sequential(
-            nn.Conv2d(1, outputs_channel, kernel_size=(41, 11), stride=(2, 2), padding=(20, 5)),
-            nn.BatchNorm2d(outputs_channel),
-            nn.Hardtanh(0, 20, inplace=True),
-            nn.Conv2d(outputs_channel, outputs_channel, kernel_size=(21, 11), stride=(2, 1), padding=(10, 5)),
-            nn.BatchNorm2d(outputs_channel),
-            nn.Hardtanh(0, 20, inplace=True)
-        ))
+#         outputs_channel = 32
+#         self.conv = MaskConv(nn.Sequential(
+#             nn.Conv2d(1, outputs_channel, kernel_size=(41, 11), stride=(2, 2), padding=(20, 5)),
+#             nn.BatchNorm2d(outputs_channel),
+#             nn.Hardtanh(0, 20, inplace=True),
+#             nn.Conv2d(outputs_channel, outputs_channel, kernel_size=(21, 11), stride=(2, 1), padding=(10, 5)),
+#             nn.BatchNorm2d(outputs_channel),
+#             nn.Hardtanh(0, 20, inplace=True)
+#         ))
 
-        rnn_input_dims = int(math.floor(input_size + 2 * 20 - 41) / 2 + 1)
-        rnn_input_dims = int(math.floor(rnn_input_dims + 2 * 10 - 21) / 2 + 1)
-        rnn_input_dims *= outputs_channel
+#         rnn_input_dims = int(math.floor(input_size + 2 * 20 - 41) / 2 + 1)
+#         rnn_input_dims = int(math.floor(rnn_input_dims + 2 * 10 - 21) / 2 + 1)
+#         rnn_input_dims *= outputs_channel
         
-<<<<<<< HEAD
         
-=======
-        self.rnn =  self.rnn_cell(rnn_input_dims, self.hidden_size, self.n_layers, dropout=self.dropout_p, bidirectional=self.bidirectional)
->>>>>>> parent of 470a378... 입력 Normalization (-1 ~ +1) 과 Log-STFT Normalization (instance, utterance_mvn)에 대한 실험 진행
 
 #         outputs_channel = 256
 #         rnn_input_dims = ((input_size - 1) // 2 - 1) // 2
 #         rnn_input_dims *= outputs_channel
 #         print(f"[Conv2dSubsampling]: rnn_input_dims: {rnn_input_dims}")
         
-        # outputs_channel = 128
-        # rnn_input_dims = (input_size) // 4
+        outputs_channel = 128
+        rnn_input_dims = (input_size) // 4
         # rnn_input_dims = ((input_size - 1) // 2 - 1) // 2
-        # rnn_input_dims *= outputs_channel
+        rnn_input_dims *= outputs_channel
         # rnn_input_dims = 5248
+        # print(f"[KoSpeech_VGG]: rnn_input_dims: {rnn_input_dims}")
         print(f"[VGG2L]: rnn_input_dims: {rnn_input_dims}")
         
         # self.conv = Conv2dSubsampling(idim=input_size, odim=outputs_channel, dropout_rate=input_dropout_p)
-        # self.conv = VGG2L(in_channel=1)
+        self.conv = VGG2L(in_channel=1)
 
         self.rnn =  self.rnn_cell(rnn_input_dims, self.hidden_size, self.n_layers, batch_first=True, dropout=self.dropout_p, bidirectional=self.bidirectional)
         
@@ -223,22 +241,21 @@ class EncoderRNN(nn.Module):
         param:input_lengths: inputs sequence length without zero-pad
         """
         
-        output_lengths = self.get_seq_lens(input_lengths)
+#        output_lengths = self.get_seq_lens(input_lengths)
 
         x = input_var # (B,1,D,T)
         
-        x, _ = self.conv(x, output_lengths) # (B, C, D, T)
-        x_size = x.size()
-        x = x.view(x_size[0], x_size[1] * x_size[2], x_size[3]) # (B, C * D, T)
-        x = x.permute(0, 2, 1).contiguous() # (B,T,D)
-
-        total_length = x_size[3]
+#         x, _ = self.conv(x, output_lengths) # (B, C, D, T)
+#         x_size = x.size()
+#         x = x.view(x_size[0], x_size[1] * x_size[2], x_size[3]) # (B, C * D, T)
+#         x = x.permute(0, 2, 1).contiguous() # (B,T,D)
+#         total_length = x_size[3]
         
-        #x = x.squeeze(1).permute(0, 2, 1).contiguous() # (B, T, D)
-        #x, _ = self.conv(x, x_mask=None) # |x| = (B, T, D) for Conv2dSubsampling
-        # x, output_lengths, _ = self.conv(xs_pad=x, ilens=input_lengths) # |x| = (B, T, D) for VGG2L
+        x = x.squeeze(1).permute(0, 2, 1).contiguous() # (B, T, D)
+        # x, _ = self.conv(x, x_mask=None) # |x| = (B, T, D) for Conv2dSubsampling
+        x, output_lengths, _ = self.conv(xs_pad=x, ilens=input_lengths) # |x| = (B, T, D) for VGG2L
+        total_length = x.size(1)
         
-        # total_length = x.size(1)
         x = nn.utils.rnn.pack_padded_sequence(x,
                                               output_lengths,
                                               batch_first=True,
@@ -258,6 +275,8 @@ class EncoderRNN(nn.Module):
         seq_len = input_length
         for m in self.conv.modules():
             if type(m) == nn.modules.conv.Conv2d :
-                seq_len = ((seq_len + 2 * m.padding[1] - m.dilation[1] * (m.kernel_size[1] - 1) - 1) / m.stride[1] + 1)
+                seq_len = ((seq_len + 2 * m.padding[1] - m.dilation[1] * (m.kernel_size[1] - 1) - 1) / m.stride[1] + 1)            
+            elif type(m) == nn.MaxPool2d:
+                seq_len >>= 1
 
         return seq_len.int()

@@ -1,5 +1,6 @@
 log/
 models/
+test/
 
 data/zeroth_korean/
 data/KsponSpeech/

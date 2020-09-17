@@ -56,7 +56,6 @@ class DecoderRNN(nn.Module):
         # self.attention = Attention(dim=self.hidden_size)
         self.fc = nn.Linear(self.hidden_size + self.encoder_output_size, self.output_size)
 
-
     def forward_step(self, input_var, hidden, encoder_outputs, context, attn_w, function):
         batch_size = input_var.size(0)
         dec_len = input_var.size(1)
@@ -80,11 +79,15 @@ class DecoderRNN(nn.Module):
             
             context = context.squeeze(1)
             output = output.squeeze(1) # (B, 1, dec_D) -> (B, dec_D)
+            
+            # ???????
             context = self.input_dropout(context)
             output = self.input_dropout(output)
+            
             output = torch.cat((output, context), dim=1) # (B, dec_D + enc_D)
 
             pred = function(self.fc(output), dim=-1)
+            
             y_all.append(pred)
 
         if embedded.size(1) != 1:

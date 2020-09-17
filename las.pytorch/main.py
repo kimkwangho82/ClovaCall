@@ -38,6 +38,7 @@ from models import EncoderRNN, DecoderRNN, Seq2Seq
 # @Kwang-Ho
 import time
 import datetime
+from initialize import initialize
 
 
 char2index = dict()
@@ -101,9 +102,6 @@ def train(model, data_loader, criterion, optimizer, device, epoch, train_sampler
     total_dist = 0
     total_length = 0
     total_sent_num = 0
-    
-    total_correct = 0
-    total_correct_denom = 0
 
     model.train()
     for i, (data) in enumerate(data_loader):
@@ -119,17 +117,16 @@ def train(model, data_loader, criterion, optimizer, device, epoch, train_sampler
         target = scripts[:, 1:]
 
         logit = model(feats, feat_lengths, scripts, teacher_forcing_ratio=teacher_forcing_ratio)
+
         logit = torch.stack(logit, dim=1).to(device)
         y_hat = logit.max(-1)[1]
 
         loss = criterion(logit.contiguous().view(-1, logit.size(-1)), target.contiguous().view(-1))
+        batch_size = logit.size(0)
+        loss = loss / batch_size
+        
         total_loss += loss.item()
         total_num += sum(feat_lengths).item()
-        
-        correct = (y_hat == target).sum().item()
-        correct_denom = sum(script_lengths)
-        total_correct += correct
-        total_correct_denom += correct_denom
 
         loss.backward()
         torch.nn.utils.clip_grad_norm_(model.parameters(), max_norm)
@@ -139,30 +136,25 @@ def train(model, data_loader, criterion, optimizer, device, epoch, train_sampler
         total_dist += dist
         total_length += length
         cer = float(dist / length) * 100
-        acc = float(correct / correct_denom) * 100
-        
+
         total_sent_num += target.size(0)
 
         print('Epoch: [{0}][{1}/{2}]\t'
               'Loss {loss:.4f}\t'
-              'Cer {cer:.4f}\t'
-              'Acc {acc:.4f}'.format(
-              (epoch + 1), (i + 1), len(train_sampler), loss=loss, cer=cer, acc=acc))
+              'Cer {cer:.4f}'.format(
+              (epoch + 1), (i + 1), len(train_sampler), loss=loss, cer=cer))
 
     # return total_loss / total_num, (total_dist / total_length) * 100
-    return total_loss / len(data_loader), (total_dist / total_length) * 100, (total_correct / total_correct_denom) * 100
+    return total_loss / len(data_loader), (total_dist / total_length) * 100
 
 
-def evaluate(model, data_loader, criterion, device, save_output=False):
+def evaluate(model, data_loader, criterion, device, save_output=False, teacher_forcing_ratio=0.0):
     total_loss = 0.
     total_num = 0
     total_dist = 0
     total_length = 0
     total_sent_num = 0
     transcripts_list = []
-    
-    total_correct = 0
-    total_correct_denom = 0
 
     model.eval()
     with torch.no_grad():
@@ -176,21 +168,18 @@ def evaluate(model, data_loader, criterion, device, save_output=False):
             src_len = scripts.size(1)
             target = scripts[:, 1:]
             
-            logit = model(feats, feat_lengths, None, teacher_forcing_ratio=0.0)
+            logit = model(feats, feat_lengths, scripts, teacher_forcing_ratio=teacher_forcing_ratio) # 3-th args: None
             logit = torch.stack(logit, dim=1).to(device)
-            # y_hat = logit.max(-1)[1]
+            y_hat = logit.max(-1)[1]
 
             logit = logit[:,:target.size(1),:] # cut over length to calculate loss
-            y_hat = logit.max(-1)[1]
                         
             loss = criterion(logit.contiguous().view(-1, logit.size(-1)), target.contiguous().view(-1))
+            batch_size = logit.size(0)
+            loss = loss / batch_size
+            
             total_loss += loss.item()
             total_num += sum(feat_lengths).item()
-            
-            correct = (y_hat == target).sum().item()
-            correct_denom = sum(script_lengths)
-            total_correct += correct
-            total_correct_denom += correct_denom
 
             dist, length, transcripts = get_distance(target, y_hat)
             cer = float(dist / length) * 100
@@ -205,8 +194,7 @@ def evaluate(model, data_loader, criterion, device, save_output=False):
     # aver_loss = total_loss / total_num
     aver_loss = total_loss / len(data_loader)
     aver_cer = float(total_dist / total_length) * 100
-    aver_acc = float(total_correct / total_correct_denom) * 100
-    return aver_loss, aver_cer, aver_acc, transcripts_list
+    return aver_loss, aver_cer, transcripts_list
 
 
 def main():
@@ -257,6 +245,9 @@ def main():
     parser.add_argument('--finetune', dest='finetune', action='store_true', default=False,
                         help='Finetune the model after load model')
     args = parser.parse_args()
+    
+    args.max_norm = 5.0
+    args.dropout = 0.0
 
     torch.manual_seed(args.seed)
     torch.cuda.manual_seed_all(args.seed)
@@ -267,7 +258,6 @@ def main():
     SOS_token = char2index['<s>']
     EOS_token = char2index['</s>']
     PAD_token = char2index['_']
-    print("SOS_token: {}, EOS_token: {}, PAD_token: {}".format(SOS_token, EOS_token, PAD_token))
 
     device = torch.device('cuda' if args.cuda else 'cpu')
 
@@ -316,16 +306,17 @@ def main():
     # input_size = int(math.floor((args.sample_rate * args.window_size) / 2) + 1)
     input_size = 80
     enc = EncoderRNN(input_size, args.encoder_size, n_layers=args.encoder_layers,
-                     dropout_p=0.3, bidirectional=args.bidirectional, # dropout_p=args.dropout
+                     dropout_p=args.dropout, bidirectional=args.bidirectional, 
                      rnn_cell=args.rnn_type, variable_lengths=False)
 
     dec = DecoderRNN(len(char2index), args.max_len, args.decoder_size, args.encoder_size,
                      SOS_token, EOS_token, PAD_token,
                      n_layers=args.decoder_layers, rnn_cell=args.rnn_type, 
-                     dropout_p=0.3, bidirectional_encoder=args.bidirectional) # dropout_p=args.dropout
+                     dropout_p=args.dropout, bidirectional_encoder=args.bidirectional)
 
 
     model = Seq2Seq(enc, dec)
+    initialize(model, init='xavier_uniform')
 
     save_folder = args.save_folder
     os.makedirs(save_folder, exist_ok=True)
@@ -341,13 +332,18 @@ def main():
             optim_state = state['optimizer']
  
     model = model.to(device)
-    optimizer = optim.Adam(model.parameters(), lr=args.lr, weight_decay=1e-5)
+    # optimizer = optim.Adam(model.parameters(), lr=args.lr, weight_decay=1e-5)
+    optimizer = optim.Adadelta(model.parameters(), lr=1.0, rho=0.95, eps=1e-08, weight_decay=0)
+    
+    scheduler = optim.lr_scheduler.ReduceLROnPlateau(optimizer, mode='min', factor=0.5, patience=1, verbose=True)
+    
     if optim_state is not None:
             optimizer.load_state_dict(optim_state)
 
-    criterion = nn.CrossEntropyLoss(reduction='mean').to(device)
-    # criterion = nn.NLLLoss(reduction='mean', ignore_index=PAD_token).to(device)
+    # criterion = nn.CrossEntropyLoss(reduction='mean').to(device)
+    criterion = nn.CrossEntropyLoss(reduction='sum').to(device) # ignore_index=PAD_token
     
+
     print(model)
     print("Number of parameters: %d" % Seq2Seq.get_param_size(model))
 
@@ -375,21 +371,26 @@ def main():
         start_time = datetime.datetime.now()
         
         for epoch in range(begin_epoch, args.epochs):
-            train_loss, train_cer, train_acc = train(train_model, train_loader, criterion, optimizer, device, epoch, train_sampler, args.max_norm, args.teacher_forcing)
+            train_loss, train_cer = train(train_model, train_loader, criterion, optimizer, device, epoch, train_sampler, args.max_norm, args.teacher_forcing)
             
             # end_time = time.time()
             # elapsed_time = end_time - start_time
             elapsed_time  = datetime.datetime.now() - start_time
             
-            train_log = 'Train({name}) Summary Epoch: [{0}]\tAverage Loss {loss:.4f}\tAverage CER {cer:.4f}\tACC {acc:.4f}\tTime {time:}'.format(epoch + 1, name='train', loss=train_loss, cer=train_cer, acc=train_acc, time=elapsed_time)
+            train_log = 'Train({name}) Summary Epoch: [{0}]\tAverage Loss {loss:.3f}\tAverage CER {cer:.3f}\tTime {time:}'.format(epoch + 1, name='train', loss=train_loss, cer=train_cer, time=elapsed_time)
             print(train_log)
             
             cer_list = []
             for test_file in args.test_file_list:
                 test_loader = testLoader_dict[test_file]
-                test_loss, test_cer, test_acc, _ = evaluate(model, test_loader, criterion, device, save_output=False)
-                test_log = 'Test({name}) Summary Epoch: [{0}]\tAverage Loss {loss:.4f}\tAverage CER {cer:.4f}\tAverage ACC {acc:.4f}\t'.format(
-                            epoch + 1, name=test_file, loss=test_loss, cer=test_cer, acc=test_acc)
+                test_loss_tf, test_cer_tf, _ = evaluate(model, test_loader, criterion, device, save_output=False, teacher_forcing_ratio=1.0)
+                test_log = '(TF=1.0) Test({name}) Summary Epoch: [{0}]\tAverage Loss {loss:.3f}\tAverage CER {cer:.3f}\t'.format(
+                            epoch + 1, name=test_file, loss=test_loss_tf, cer=test_cer_tf)
+                print(test_log)
+                
+                test_loss, test_cer, _ = evaluate(model, test_loader, criterion, device, save_output=False, teacher_forcing_ratio=0.0)
+                test_log = '(TF=0.0) Test({name}) Summary Epoch: [{0}]\tAverage Loss {loss:.3f}\tAverage CER {cer:.3f}\t'.format(
+                            epoch + 1, name=test_file, loss=test_loss, cer=test_cer)
                 print(test_log)
 
                 cer_list.append(test_cer)
@@ -405,10 +406,13 @@ def main():
 
             print("Shuffling batches...")
             train_sampler.shuffle(epoch)
+            
+            scheduler.step(float(test_loss_tf))
+            # print('Learning rate annealed to: {lr:.6f}'.format(lr=scheduler.get_lr()))
 
-            for g in optimizer.param_groups:
-                g['lr'] = g['lr'] / args.learning_anneal
-            print('Learning rate annealed to: {lr:.6f}'.format(lr=g['lr']))
+#             for g in optimizer.param_groups:
+#                 g['lr'] = g['lr'] / args.learning_anneal
+#             print('Learning rate annealed to: {lr:.6f}'.format(lr=g['lr']))
 
 if __name__ == "__main__":
     main()

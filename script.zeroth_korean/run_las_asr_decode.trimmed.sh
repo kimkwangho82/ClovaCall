@@ -59,6 +59,25 @@ MAX_LEN=128
 TRAIN_INFO="zeroth_korean_trimmed_uttmvn" # "ClovaCall"
 MODE="test"
 
+
+################################################################
+## Experiment
+################################################################
+norm_type="utterance_mvn"
+
+if [ $norm_type = "instance" ]; then
+    CUDA_DEVICE_ID=1
+    TRAIN_INFO="zeroth_korean_trimmed_instance+inputnorm"
+elif [ $norm_type = "utterance_mvn" ]; then
+    # CUDA_DEVICE_ID=0 
+    # TRAIN_INFO="zeroth_korean_trimmed_utterance_mvn+inputnorm+cnn+espnetfbank"
+    CUDA_DEVICE_ID=1 
+    TRAIN_INFO="zeroth_korean_trimmed_utterance_mvn+inputnorm+cnn+kaldifbank"
+else
+    exit 1
+fi
+
+
 ################################################################
 ##	Careful while modifying lines below.
 ################################################################

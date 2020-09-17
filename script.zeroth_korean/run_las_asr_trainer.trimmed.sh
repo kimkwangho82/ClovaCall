@@ -38,7 +38,7 @@ CUDA_DEVICE_ID=1 # 0
 
 # Default
 RNN_TYPE=LSTM
-BATCH_SIZE=16 # 32
+BATCH_SIZE=16 # 16 # 32
 LR=3e-4
 LR_ANNEAL=1.1
 DROPOUT=0.3
@@ -52,13 +52,11 @@ DECODER_LAYERS=2
 DECODER_SIZE=512
 
 GPU_SIZE=1 # 1
-CPU_SIZE=4 # 4
+CPU_SIZE=8 # 4
 
 MAX_LEN=128 
 
 # TRAIN_INFO="zeroth_korean_trimmed_uttmvn" # "ClovaCall"
-<<<<<<< HEAD
-TRAIN_INFO="zeroth_korean_trimmed_utterance_mvn" # "ClovaCall"
 TRAIN_INFO="zeroth_korean_trimmed_utterance_mvn" # "ClovaCall"
 # TRAIN_INFO="zeroth_korean_trimmed_uttmvn_logmelfbank" # "ClovaCall"
 
@@ -72,15 +70,18 @@ if [ $norm_type = "instance" ]; then
     CUDA_DEVICE_ID=1
     TRAIN_INFO="zeroth_korean_trimmed_instance+inputnorm"
 elif [ $norm_type = "utterance_mvn" ]; then
-    CUDA_DEVICE_ID=0
-    TRAIN_INFO="zeroth_korean_trimmed_utterance_mvn+inputnorm+cnn"
+    CUDA_DEVICE_ID=1 
+    TRAIN_INFO="zeroth_korean_trimmed_instance_mvn_std+inputnorm+cnn+espnetfbank"
+    
+    # TRAIN_INFO="zeroth_korean_trimmed_instance_mvn+inputnorm+cnn+espnetfbank"
+    
+    # TRAIN_INFO="zeroth_korean_trimmed_utterance_mvn+inputnorm+cnn+espnetfbank"
+    
+    # CUDA_DEVICE_ID=1 
+    # TRAIN_INFO="zeroth_korean_trimmed_utterance_mvn+inputnorm+cnn+kaldifbank"
 else
     exit 1
 fi
-
-=======
-TRAIN_INFO="zeroth_korean_trimmed_uttmvn_logmelfbank" # "ClovaCall"
->>>>>>> parent of 470a378... 입력 Normalization (-1 ~ +1) 과 Log-STFT Normalization (instance, utterance_mvn)에 대한 실험 진행
 
 ################################################################
 ##	Careful while modifying lines below.
